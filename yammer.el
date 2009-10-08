@@ -320,6 +320,41 @@ Useful when using a sperate buffer for composition, possibly with flyspell."
 
 ;; (yammer-authenticate unix-user-name)
 
+(defvar yammer-timer nil)
+(defvar yammer-timer-interval 60)
+
+(defvar yammer-last-id 0)
+(defvar yammer-new-tweets-hook nil)
+
+(defun yammer-list-message-noninteractive ()
+  (save-excursion
+    (save-window-excursion
+      (progn
+	(yammer-list-messages)
+	(let ((id (yammer-current-id)))
+	  (if (/= id yammer-last-id)
+	      (progn
+		(setq yammer-last-id id)
+		(run-hook 'yammer-new-tweets-hook))))))))
+
+(defun yammer-start ()
+  (interactive)
+  (if yammer-timer
+      nil
+    (progn
+      (yammer-list-messages)
+      (setq yammer-timer
+	    (run-at-time "0 sec"
+			 yammer-timer-interval
+			 #'yammer-list-message-noninteractive)))))
+
+(defun yammer-stop ()
+  (interactive)
+  (if yammer-timer
+      (progn
+	(cancel-timer yammer-timer)
+	(setq yammer-timer nil))))
+
 (provide 'yammer)
 
 ;;; yammer.el ends here
