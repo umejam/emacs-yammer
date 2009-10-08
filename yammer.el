@@ -69,10 +69,10 @@
 
 (defun yammer-authenticate (username)
   "Get authentication token"
-  (if (file-exists-p (format "/home/%s/.yammer-token" username))
+  (if (file-exists-p (format "/Users/%s/.yammer-token" username))
       (progn
         (save-excursion
-          (find-file (format "/home/%s/.yammer-token" username))
+          (find-file (format "/Users/%s/.yammer-token" username))
           (let ((str (buffer-substring (point-min) (point-max))))
             (if (string-match "\\([^:]*\\):\\(.*\\)"
                               (buffer-substring (point-min) (point-max)))
@@ -98,7 +98,7 @@
                                  yammer-user-authorize
                                  callback)))
     (save-excursion
-      (find-file (format "/home/%s/.yammer-token" username))
+      (find-file (format "/Users/%s/.yammer-token" username))
       (end-of-buffer)
       (let ((token (oauth-access-token-auth-t yammer-access-token)))
         (insert (format "%s:%s\n" 
@@ -168,7 +168,7 @@ Useful when using a sperate buffer for composition, possibly with flyspell."
   (interactive)
   (let ((images (remove-if
                  (lambda (url)
-                   (file-exists-p (concat yammer-tmp-dir "/" (yammer-image-name-url))))
+                   (file-exists-p (concat yammer-tmp-dir "/" (yammer-image-name url))))
                  (mapcar
                   (lambda (user) (hash-val 'mugshot_url user))
                   yammer-user-list))))
@@ -176,6 +176,7 @@ Useful when using a sperate buffer for composition, possibly with flyspell."
         (make-directory yammer-tmp-dir))
     (apply 'call-process "wget" nil nil nil
            (format "--directory-prefix=%s" yammer-tmp-dir)
+	   "--no-check-certificate"
            "--no-clobber"
            "--quiet"
            images)))
