@@ -168,7 +168,7 @@ Useful when using a sperate buffer for composition, possibly with flyspell."
   (interactive)
   (let ((images (remove-if
                  (lambda (url)
-                   (file-exists-p (concat yammer-tmp-dir "/" (yammer-image-name-url))))
+                   (file-exists-p (concat yammer-tmp-dir "/" (yammer-image-name url))))
                  (mapcar
                   (lambda (user) (hash-val 'mugshot_url user))
                   yammer-user-list))))
