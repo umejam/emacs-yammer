@@ -335,7 +335,7 @@ Useful when using a sperate buffer for composition, possibly with flyspell."
 	  (if (/= id yammer-last-id)
 	      (progn
 		(setq yammer-last-id id)
-		(run-hook 'yammer-new-tweets-hook))))))))
+		(run-hooks 'yammer-new-tweets-hook))))))))
 
 (defun yammer-start ()
   (interactive)
