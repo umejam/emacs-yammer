@@ -67,6 +67,89 @@
 
 (defvar yammer-access-token nil)
 
+(defvar yammer-timer nil)
+(defvar yammer-timer-interval 60)
+
+(defvar yammer-last-id 0)
+(defvar yammer-new-tweets-hook nil)
+
+(defvar yammer-uri-face 'yammer-uri-face)
+(defvar yammer-username-face 'yammer-username-face)
+(defvar yammer-in-reply-to-face 'yammer-in-reply-to-face)
+(defvar yammer-date-face 'yammer-date-face)
+
+(defun yammer-make-uri-clickable (text)
+  (let ((regex-index 0))
+    (while regex-index
+      (setq regex-index
+	    (string-match "\\(https?://[-_.!~*'()a-zA-Z0-9;/?:@&=+$,%#]+\\)"
+			  text
+			  regex-index))
+      (when regex-index
+	(let ((uri (match-string-no-properties 0 text)))
+	  (add-text-properties
+	   (match-beginning 0)
+	   (match-end 0)
+	   `(mouse-face highlight
+	     face yammer-uri-face
+	     uri-in-text ,uri)
+	   text))
+	(setq regex-index (match-end 0)))))
+  text)
+
+(defun yammer-username->string (req)
+  (let ((user-name (format 
+		    "%s"
+		    (funcall get-username (hash-val 'sender_id req)))))
+	(add-text-properties 0 (length user-name)
+			     '(face yammer-username-face)
+			     user-name)
+	user-name))
+
+(defun yammer-reply-to->string (req)
+  (format 
+   "%s:\n"
+   (let ((reply-id (hash-val 'replied_to_id req))
+	 (reply-tag " in reply to ")
+	 (post))
+     (or
+      (when reply-id
+	(setq post
+	      (car (hash-val reply-id message-alist-by-thread)))
+	(when post
+	  (concat 
+	   (progn
+	     (add-text-properties 0 (length reply-tag)
+				  `(face yammer-in-reply-to-face
+				    reply-id ,reply-id)
+				  reply-tag)
+	     reply-tag)
+	   (let ((post-name (funcall get-username (hash-val 'sender_id post))))
+	     (add-text-properties 0 (length post-name)
+				  '(face yammer-username-face)
+				  post-name)
+	     post-name))))
+      ""))))
+
+(defun yammer-date-and-client->string (req)
+  (let ((text (format "\n\tAbout %s from %s\n"
+		      (yammer-pretty-date 
+		       (yammer-parse-date
+			(hash-val 'created_at req)))
+		      (hash-val 'client_type req))))
+    (add-text-properties 0 (length text)
+			 '(face yammer-date-face)
+			 text)
+    text))
+
+(defun yammer-attachment->string (attachment)
+  (let ((type (hash-val 'type attachment)))
+    (cond
+     ((equal type "image") 
+      (yammer-make-uri-clickable 
+       (format "%s" (hash-val 'url (hash-val 'image attachment)))))
+     (t "Unknown attachment type"))))
+
 (defun yammer-authenticate (username)
   "Get authentication token"
   (if (file-exists-p (format "/Users/%s/.yammer-token" username))
@@ -185,6 +268,14 @@ Useful when using a sperate buffer for composition, possibly with flyspell."
   (string-match ".*/\\(.*\\)$" url)
   (match-string 1 url))
 
+(defun yammer-enter ()
+  (interactive)
+  (let ((uri-in-text (get-text-property (point) 'uri-in-text))
+	(reply-id (get-text-property (point) 'reply-id)))
+    (cond
+     (uri-in-text (browse-url uri-in-text))
+     (reply-id (yammer-move-to-id reply-id)))))
+
 (defun yammer-list-messages () 
   "List recent posts"
   (interactive)
@@ -227,29 +318,20 @@ Useful when using a sperate buffer for composition, possibly with flyspell."
                  (insert-image-file (concat yammer-tmp-dir "/" filename))
                  (forward-char)
                  (insert "\n")))
-             (insert (format 
-                      "%s%s: %s\n\n\tAbout %s from %s\n------------\n"
-                      (funcall get-username (hash-val 'sender_id yamm))
-                      (let ((reply-id (hash-val 'replied_to_id yamm)) 
-                            (post))
-                        (or
-                         (when reply-id
-                           (setq post
-                                 (car (hash-val reply-id
-                                                message-alist-by-thread)))
-                           (when post
-                             (concat 
-                              " in reply to "
-                              (funcall get-username 
-                                       (hash-val 'sender_id post))))) ""))
-                      (replace-regexp-in-string 
-                       "\n"
-                       "\n\t"
-                       (hash-val 'plain (hash-val 'body yamm)))
-                      (yammer-pretty-date 
-                       (yammer-parse-date
-                        (hash-val 'created_at yamm)))
-                      (hash-val 'client_type yamm))))))
+	     (insert (yammer-username->string yamm))
+	     (insert (yammer-reply-to->string yamm))
+	     (insert (format " %s\n"
+			     (yammer-make-uri-clickable 
+			      (replace-regexp-in-string 
+			       "\n"
+			       "\n\t"
+			       (hash-val 'plain (hash-val 'body yamm))))))
+	     (let ((attachments (hash-val 'attachments yamm)))
+		   (loop for attachment across attachments do
+			 (insert (format "  %s\n"
+					 (yammer-attachment->string attachment)))))
+	     (insert (yammer-date-and-client->string yamm))
+	     (insert "------------\n"))))
   (yammer-messages-mode)
   (beginning-of-buffer))
 
@@ -263,6 +345,16 @@ Useful when using a sperate buffer for composition, possibly with flyspell."
     (cadr
      (find-if
       (lambda (item) (<= (car item) (point))) yammer-id-positions))))
+
+(defun yammer-move-to-id (id)
+  (let ((pos
+	 (find-if
+	  (lambda (item)
+	    (eq (car (cdr item)) id)) yammer-id-positions)))
+    (if pos 
+	(progn
+	  (goto-char (car pos))
+	  (recenter)))))
 
 (defun yammer-parse-date (date-string)
   "Returns a emacs date for the given time string like what `encode-time' returns"
@@ -290,41 +382,22 @@ Useful when using a sperate buffer for composition, possibly with flyspell."
   "YammerMessages"
   "Viewing Yammer messages."
   (setq buffer-read-only t)
+  (font-lock-mode -1)
   (define-key yammer-messages-mode-map "i" 'yammer-display-current-id)
   (define-key yammer-messages-mode-map "p" 'yammer-post-message)
   (define-key yammer-messages-mode-map "r" 'yammer-reply-to-message)
   (define-key yammer-messages-mode-map "d" 'yammer-delete-message)
   (define-key yammer-messages-mode-map "R" 'yammer-list-messages)
   (define-key yammer-messages-mode-map "l" 'yammer-list-messages)
-  (set (make-local-variable 'font-lock-defaults)
-       '(yammer-font-lock-keywords 
-         t))) ;; KEYWORDS-ONLY
-
-(defvar yammer-font-lock-keywords-1
-  (list
-   '("^\\(Bear:\\) \\(.*\\) r[0-9]+" 
-     (1 font-lock-comment-face)
-     (2 font-lock-builtin-face))
-   '("^\\(.+\\) \\(in reply to\\) \\([^:]+\\):"
-     (1 font-lock-builtin-face)
-     (2 font-lock-type-face)
-     (3 font-lock-builtin-face))
-   '("^\\([[:word:]]+ ?[[:word:]]*\\):" . 
-     font-lock-builtin-face)
-   '("^[ \t]+About [[:digit:]]+ [[:word:]]+ ago from .*" .
-     font-lock-string-face)))
-
-(defvar yammer-font-lock-keywords 
-  yammer-font-lock-keywords-1
-  "Default highlighting for yammer mode")
-
-;; (yammer-authenticate unix-user-name)
-
-(defvar yammer-timer nil)
-(defvar yammer-timer-interval 60)
-
-(defvar yammer-last-id 0)
-(defvar yammer-new-tweets-hook nil)
+  (define-key yammer-messages-mode-map "\C-m" 'yammer-enter)
+  (defface yammer-uri-face `((t nil)) "" :group 'faces)
+  (set-face-attribute 'yammer-uri-face nil :underline t)
+  (defface yammer-username-face `((t nil)) "" :group 'faces)
+  (copy-face 'font-lock-builtin-face 'yammer-username-face)
+  (defface yammer-in-reply-to-face `((t nil)) "" :group 'faces)
+  (copy-face 'font-lock-type-face 'yammer-in-reply-to-face)
+  (defface yammer-date-face `((t nil)) "" :group 'faces)
+  (copy-face 'font-lock-string-face 'yammer-date-face))
 
 (defun yammer-list-message-noninteractive ()
   (save-excursion
