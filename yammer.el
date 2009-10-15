@@ -65,6 +65,8 @@
 (defvar yammer-create-message-url "https://yammer.com/api/v1/messages")
 (defvar yammer-delete-url-base "https://www.yammer.com/api/v1/messages/")
 
+(defvar yammer-token-file-path (concat (getenv "HOME") "/.yammer-token"))
+
 (defvar yammer-access-token nil)
 
 (defvar yammer-timer nil)
@@ -150,12 +152,12 @@
        (format "%s" (hash-val 'url (hash-val 'image attachment)))))
      (t "Unknown attachment type"))))
 
-(defun yammer-authenticate (username)
+(defun yammer-authenticate ()
   "Get authentication token"
-  (if (file-exists-p (format "/Users/%s/.yammer-token" username))
+  (if (file-exists-p yammer-token-file-path)
       (progn
         (save-excursion
-          (find-file (format "/Users/%s/.yammer-token" username))
+          (find-file yammer-token-file-path)
           (let ((str (buffer-substring (point-min) (point-max))))
             (if (string-match "\\([^:]*\\):\\(.*\\)"
                               (buffer-substring (point-min) (point-max)))
@@ -181,7 +183,7 @@
                                  yammer-user-authorize
                                  callback)))
     (save-excursion
-      (find-file (format "/Users/%s/.yammer-token" username))
+      (find-file yammer-token-file-path)
       (end-of-buffer)
       (let ((token (oauth-access-token-auth-t yammer-access-token)))
         (insert (format "%s:%s\n" 
