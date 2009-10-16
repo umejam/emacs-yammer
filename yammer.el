@@ -195,6 +195,7 @@
     
 (defun yammer-internal-post-message (message &optional reply-to-id)
   "Post message to yammer"
+  (yammer-stop)
   (let ((args `(("body" . ,message))))
     (if reply-to-id 
         (push `("replied_to_id" . ,(number-to-string reply-to-id)) args))
@@ -205,7 +206,8 @@
       (end-of-line)
       (setq line (buffer-substring beg (point)))
       (if (string-match "201 Created" line) (message "Message Created!")
-        (error "Problem creating message: %s" line)))))
+        (error "Problem creating message: %s" line))))
+  (yammer-start))
 
 (defun yammer-post-buffer-contents ()
   "Posts the contents of the current buffer to yammer.
