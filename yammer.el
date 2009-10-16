@@ -358,6 +358,27 @@ Useful when using a sperate buffer for composition, possibly with flyspell."
 	  (goto-char (car pos))
 	  (recenter)))))
 
+(defun yammer-search-next-position (id lst)
+  (if (null lst)
+      nil
+    (let ((next-pos (car lst))
+	  (pos (car (cdr lst))))
+      (if (eq id (car (cdr pos)))
+	  (car next-pos)
+	(yammer-search-next-position id (cdr lst))))))
+
+(defun yammer-goto-next ()
+  (interactive)
+  (let ((pos (yammer-search-next-position (yammer-current-id) yammer-id-positions)))
+    (if pos
+	(goto-char pos))))
+
+(defun yammer-goto-prev ()
+  (interactive)
+  (let ((pos (yammer-search-next-position (yammer-current-id) (reverse yammer-id-positions))))
+    (if pos
+	(goto-char pos))))
+
 (defun yammer-parse-date (date-string)
   "Returns a emacs date for the given time string like what `encode-time' returns"
   (apply 'encode-time
@@ -391,6 +412,8 @@ Useful when using a sperate buffer for composition, possibly with flyspell."
   (define-key yammer-messages-mode-map "d" 'yammer-delete-message)
   (define-key yammer-messages-mode-map "R" 'yammer-list-messages)
   (define-key yammer-messages-mode-map "l" 'yammer-list-messages)
+  (define-key yammer-messages-mode-map "N" 'yammer-goto-next)
+  (define-key yammer-messages-mode-map "P" 'yammer-goto-prev)
   (define-key yammer-messages-mode-map "\C-m" 'yammer-enter)
   (defface yammer-uri-face `((t nil)) "" :group 'faces)
   (set-face-attribute 'yammer-uri-face nil :underline t)
