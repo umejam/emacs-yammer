@@ -379,6 +379,40 @@ Useful when using a sperate buffer for composition, possibly with flyspell."
     (if pos
 	(goto-char pos))))
 
+;; code from navi2ch
+(defun yammer-next-property (point prop)
+  (setq point (next-single-property-change point prop))
+  (when (and point
+	     (null (get-text-property point prop)))
+    (setq point (next-single-property-change point prop)))
+  point)
+
+;; code from navi2ch
+(defun yammer-prev-property (point prop)
+  (when (> point (point-min))
+    (when (eq (get-text-property point prop)
+	      (get-text-property (1- point) prop))
+      (setq point (previous-single-property-change point prop)))
+    (when (and point
+	       (null (get-text-property (1- point) prop)))
+      (setq point (previous-single-property-change point prop)))
+    (when point
+      (or (previous-single-property-change point prop) (point-min)))))
+
+;; code from navi2ch
+(defun yammer-next-link ()
+  (interactive)
+  (let ((point (yammer-next-property (point) 'uri-in-text)))
+    (if point
+	(goto-char point))))
+
+;; code from navi2ch
+(defun yammer-prev-link ()
+  (interactive)
+  (let ((point (yammer-prev-property (point) 'uri-in-text)))
+    (if point
+	(goto-char point))))
+
 (defun yammer-parse-date (date-string)
   "Returns a emacs date for the given time string like what `encode-time' returns"
   (apply 'encode-time
@@ -414,6 +448,8 @@ Useful when using a sperate buffer for composition, possibly with flyspell."
   (define-key yammer-messages-mode-map "l" 'yammer-list-messages)
   (define-key yammer-messages-mode-map "N" 'yammer-goto-next)
   (define-key yammer-messages-mode-map "P" 'yammer-goto-prev)
+  (define-key yammer-messages-mode-map "\C-i" 'yammer-next-link)
+  (define-key yammer-messages-mode-map "\e\C-i" 'yammer-prev-link)
   (define-key yammer-messages-mode-map "\C-m" 'yammer-enter)
   (defface yammer-uri-face `((t nil)) "" :group 'faces)
   (set-face-attribute 'yammer-uri-face nil :underline t)
